@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-paper: #ffffff;
+  --color-ink: #2b2724;
+  --color-ink-soft: #6e6a66;
+  --color-brick: #b04a2f;
+  --color-brick-deep: #7e3220;
+  --color-brick-wash: #f7f1ec;
+  --color-note-wash: #fbf3ee;
+  --color-line: #e3dcd5;
+  --color-moss: #646247;
+  --color-amber: #d89e57;
+  --color-clay: #ca6f44;
+  --color-charcoal: #3a3638;
+  --color-alert: #a33528;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --radius: 0.25rem;
+  --background: #ffffff;
+  --foreground: #2b2724;
+  --card: #ffffff;
+  --card-foreground: #2b2724;
+  --popover: #ffffff;
+  --popover-foreground: #2b2724;
+  --primary: #b04a2f;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f1ec;
+  --secondary-foreground: #7e3220;
+  --muted: #f7f1ec;
+  --muted-foreground: #6e6a66;
+  --accent: #f7f1ec;
+  --accent-foreground: #7e3220;
+  --destructive: #a33528;
+  --border: #e3dcd5;
+  --input: #e3dcd5;
+  --ring: #b04a2f;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  ::selection {
+    background: #f7d9cd;
+  }
+}
+
+/* Mozaikový pruh z vizuální reference — hlavička a oddělovač sekcí. */
+.mosaic {
+  height: 8px;
+  background-image: linear-gradient(
+    to right,
+    #b04a2f 0 12.5%,
+    #7e3220 12.5% 25%,
+    #ca6f44 25% 37.5%,
+    #d89e57 37.5% 50%,
+    #646247 50% 62.5%,
+    #3a3638 62.5% 75%,
+    #9d8f64 75% 87.5%,
+    #a86e5c 87.5% 100%
+  );
+}
+
+/* Nadpis sekce — verzálky s prostrkáním, jako popisky v referenci. */
+.section-label {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #b04a2f;
+  font-weight: 700;
+}
+
+.field-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6e6a66;
+  margin-bottom: 4px;
+}
+
+.field-input {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e3dcd5;
+  border-radius: 2px;
+  padding: 7px 10px;
+  font-size: 14px;
+  color: #2b2724;
+  outline: none;
+}
+
+.field-input:focus {
+  border-color: #b04a2f;
+  box-shadow: 0 0 0 3px rgba(176, 74, 47, 0.12);
+}
+
+.field-input::placeholder {
+  color: #b3aca6;
+}
+
+.tabulka {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.tabulka th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6e6a66;
+  font-weight: 700;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e3dcd5;
+}
+
+.tabulka td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #efe9e3;
+  vertical-align: top;
+}
+
+.tabulka tbody tr:hover {
+  background: #fbf3ee;
+}
+
+.hint-highlight {
+  background: #fff08a;
+  color: #2b2724;
+  padding: 0 2px;
+}
