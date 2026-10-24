@@ -370,7 +370,7 @@ export async function zakazkyBezEvidence() {
     })
     .from(zakazky)
     .leftJoin(evidence, eq(evidence.zakazkaId, zakazky.id))
-    .where(isNull(evidence.id))
+    .where(and(isNull(evidence.id), isNull(zakazky.smazanoAt)))
     .orderBy(asc(zakazky.cislo));
   return radky;
 }

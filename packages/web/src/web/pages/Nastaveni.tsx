@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { Check, Field, TextInput, Tlacitko } from "../components/fields";
 import { Hr, PageTitle, SectionTitle } from "../components/layout";
 import { formatDatumCas } from "../lib/format";
+import { ZalohySekce } from "../components/zaloha";
 import {
   useDriveDiagnostika,
   useDriveOdpojit,
@@ -109,6 +110,10 @@ export default function Nastaveni() {
       ) : null}
 
       <DriveSekce />
+
+      <Hr />
+
+      <ZalohySekce />
 
       <Hr />
 

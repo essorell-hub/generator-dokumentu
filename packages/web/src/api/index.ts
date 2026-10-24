@@ -11,6 +11,9 @@ import {
   revizeRouter,
 } from "./routes/agenda";
 import { provozRouter } from "./routes/provoz";
+import { prehledRouter } from "./routes/prehled";
+import { zalohaRouter } from "./routes/zaloha";
+import { vytvorZalohu } from "./lib/zaloha";
 import { nazevProvozSouboru, provozXlsx } from "./lib/provozXlsx";
 import { autorizacniUrl, dokonciPrihlaseni, maKonfiguraci } from "./lib/drive";
 import { sestavSadu, vyberKlice } from "./lib/sada";
@@ -31,6 +34,8 @@ export const router = {
   normy: normyRouter,
   maily: mailyRouter,
   provoz: provozRouter,
+  prehled: prehledRouter,
+  zaloha: zalohaRouter,
 };
 
 export type AppRouter = typeof router;
@@ -107,6 +112,17 @@ function odpovedXlsx(data: Uint8Array, nazev: string): Response {
     },
   });
 }
+
+app.get("/api/soubory/zaloha.json", async () => {
+  const zaloha = await vytvorZalohu();
+  return new Response(zaloha.data as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(zaloha.nazev)}`,
+    },
+  });
+});
 
 app.get("/api/soubory/evidence.xlsx", async () => {
   return odpovedXlsx(await evidenceXlsx(), nazevEvidenceSouboru());

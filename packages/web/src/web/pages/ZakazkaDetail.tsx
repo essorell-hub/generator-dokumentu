@@ -75,16 +75,33 @@ export default function ZakazkaDetail() {
   const [zmeneno, setZmeneno] = useState(false);
   const [otevrenyNahled, setOtevrenyNahled] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!detail.data) return;
-    const zakazka = detail.data.zakazka as unknown as Record<string, unknown>;
+  // Neuložené úpravy se nikdy tiše nepřepíšou; případný konflikt se ukáže při uložení.
+  const zmenenoRef = useRef(false);
+  // Čas poslední změny zakázky, který jsme při načtení viděli (kvůli ochraně před přepsáním).
+  const zakladRef = useRef<number | undefined>(undefined);
+
+  const nastavZmeneno = (hodnota: boolean) => {
+    zmenenoRef.current = hodnota;
+    setZmeneno(hodnota);
+  };
+
+  const naplnFormular = (data: NonNullable<typeof detail.data>) => {
+    const zakazka = data.zakazka as unknown as Record<string, unknown>;
     const novy: Formular = { ...PRAZDNY };
     for (const klic of POLE_FORMULARE) {
       const hodnota = zakazka[klic];
       if (typeof hodnota === "string") novy[klic] = hodnota;
     }
+    zakladRef.current = new Date(data.zakazka.updatedAt).getTime();
     setForm(novy);
-    setZmeneno(false);
+    nastavZmeneno(false);
+  };
+
+  useEffect(() => {
+    if (!detail.data) return;
+    if (zmenenoRef.current) return;
+    naplnFormular(detail.data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail.data]);
 
   // Výchozí výběr jen jednou: projektová a revizní dokumentace. Dokumenty pro provoz
@@ -129,11 +146,32 @@ export default function ZakazkaDetail() {
 
   const nastav = (klic: string, hodnota: string) => {
     setForm((f) => ({ ...f, [klic]: hodnota }));
-    setZmeneno(true);
+    nastavZmeneno(true);
+  };
+
+  const poUlozeni = (zakazka: { updatedAt: Date | string }) => {
+    zakladRef.current = new Date(zakazka.updatedAt).getTime();
+    nastavZmeneno(false);
   };
 
   const ulozit = () => {
-    upravit.mutate({ id, ...form }, { onSuccess: () => setZmeneno(false) });
+    upravit.mutate({ id, ...form, ocekavanaZmena: zakladRef.current }, { onSuccess: poUlozeni });
+  };
+
+  // Někdo jiný zakázku mezitím změnil: uživatel si vybere, co s tím.
+  const chyba = upravit.error as { code?: string; data?: { zmeneno?: number } } | null;
+  const konflikt = upravit.isError && chyba?.code === "CONFLICT";
+
+  const nactiAktualni = async () => {
+    const r = await detail.refetch();
+    if (r.data) {
+      upravit.reset();
+      naplnFormular(r.data);
+    }
+  };
+
+  const prepsatPresto = () => {
+    upravit.mutate({ id, ...form }, { onSuccess: poUlozeni });
   };
 
   const prepni = (klic: string) =>
@@ -276,21 +314,42 @@ export default function ZakazkaDetail() {
           <Tlacitko onClick={ulozit} disabled={!zmeneno || upravit.isPending}>
             {upravit.isPending ? "Ukládám…" : zmeneno ? "Uložit údaje" : "Uloženo"}
           </Tlacitko>
-          {upravit.isError ? (
+          {upravit.isError && !konflikt ? (
             <span className="text-[13px] text-alert">{upravit.error.message}</span>
           ) : null}
           <Tlacitko
             varianta="text"
             className="ml-auto text-alert"
             onClick={async () => {
-              if (!confirm(`Smazat zakázku ${zakazkaCislo} včetně záznamů o vygenerovaných souborech?`)) return;
+              if (
+                !confirm(
+                  `Přesunout zakázku ${zakazkaCislo} do koše? Dokumenty zůstanou zachované a zakázku můžete ze seznamu zakázek obnovit.`,
+                )
+              )
+                return;
               await smazat.mutateAsync({ id });
               naviguj("/");
             }}
           >
-            Smazat zakázku
+            Přesunout do koše
           </Tlacitko>
         </div>
+
+        {konflikt ? (
+          <div className="mt-4 border border-alert bg-brick-wash/40 p-4 text-[14px]">
+            <p className="text-ink">
+              Tuto zakázku mezitím změnil někdo jiný
+              {chyba?.data?.zmeneno ? ` (${formatDatumCas(new Date(chyba.data.zmeneno))})` : ""}. Vaše úpravy zatím nejsou
+              uložené.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Tlacitko onClick={nactiAktualni}>Načíst aktuální údaje (moje úpravy se zahodí)</Tlacitko>
+              <Tlacitko varianta="obrys" onClick={prepsatPresto}>
+                Přesto uložit moje úpravy
+              </Tlacitko>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <Hr />

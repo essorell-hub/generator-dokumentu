@@ -46,3 +46,25 @@ export function useSmazatZakazku() {
     }),
   );
 }
+
+export function useKos() {
+  return useQuery(orpc.zakazky.kos.queryOptions());
+}
+
+export function useObnovitZakazku() {
+  const qc = useQueryClient();
+  return useMutation(
+    orpc.zakazky.obnovit.mutationOptions({
+      onSuccess: () => qc.invalidateQueries({ queryKey: orpc.zakazky.key() }),
+    }),
+  );
+}
+
+export function useSmazatTrvale() {
+  const qc = useQueryClient();
+  return useMutation(
+    orpc.zakazky.smazatTrvale.mutationOptions({
+      onSuccess: () => qc.invalidateQueries({ queryKey: orpc.zakazky.key() }),
+    }),
+  );
+}

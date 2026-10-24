@@ -1,19 +1,31 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Field, Select, TextInput, Tlacitko } from "../components/fields";
+import { PrehledTerminu } from "../components/prehled";
 import { PageTitle, PrazdnyStav, SectionTitle, StavBadge } from "../components/layout";
 import { formatDatumCas } from "../lib/format";
-import { useDalsiCislo, useVytvoritZakazku, useZakazky } from "../queries/zakazky";
+import {
+  useDalsiCislo,
+  useKos,
+  useObnovitZakazku,
+  useSmazatTrvale,
+  useVytvoritZakazku,
+  useZakazky,
+} from "../queries/zakazky";
 
 export default function Zakazky() {
   const [, naviguj] = useLocation();
   const [hledat, setHledat] = useState("");
   const [stav, setStav] = useState("");
   const [nova, setNova] = useState(false);
+  const [kosOtevreny, setKosOtevreny] = useState(false);
 
   const seznam = useZakazky(hledat, stav);
   const dalsi = useDalsiCislo();
   const vytvorit = useVytvoritZakazku();
+  const kos = useKos();
+  const obnovit = useObnovitZakazku();
+  const smazatTrvale = useSmazatTrvale();
 
   const [cislo, setCislo] = useState("");
   const [nazevStavby, setNazevStavby] = useState("");
@@ -45,6 +57,8 @@ export default function Zakazky() {
       <PageTitle podtitul="Zadejte zakázku, vyberte dokumenty a vygenerujte je do složky zakázky na Google Drive.">
         Zakázky
       </PageTitle>
+
+      <PrehledTerminu />
 
       <div className="mb-8 flex flex-wrap items-end gap-4">
         <div className="min-w-[240px] flex-1">
@@ -162,6 +176,66 @@ export default function Zakazky() {
           </tbody>
         </table>
       )}
+      {kos.data?.length ? (
+        <section className="mt-12 border-t border-line pt-6">
+          <Tlacitko varianta="text" className="px-0" onClick={() => setKosOtevreny((o) => !o)}>
+            Koš ({kos.data.length}) {kosOtevreny ? "▴" : "▾"}
+          </Tlacitko>
+          {kosOtevreny ? (
+            <>
+              <p className="mt-2 text-[13px] text-ink-soft">
+                Smazané zakázky. Z koše je můžete obnovit i s dokumenty, nebo je smazat natrvalo.
+              </p>
+              <table className="tabulka mt-4">
+                <thead>
+                  <tr>
+                    <th className="w-[130px]">Číslo</th>
+                    <th>Stavba</th>
+                    <th>Investor</th>
+                    <th className="w-[150px]">Smazáno</th>
+                    <th className="w-[230px]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kos.data.map((z) => (
+                    <tr key={z.id}>
+                      <td className="font-mono text-[13px] text-ink-soft">{z.cislo}</td>
+                      <td className="text-ink">{z.nazevStavby || "—"}</td>
+                      <td className="text-ink-soft">{z.investor || "—"}</td>
+                      <td className="text-[13px] text-ink-soft">{formatDatumCas(z.smazanoAt)}</td>
+                      <td className="text-right">
+                        <Tlacitko
+                          varianta="obrys"
+                          disabled={obnovit.isPending}
+                          onClick={() => obnovit.mutate({ id: z.id })}
+                        >
+                          Obnovit
+                        </Tlacitko>{" "}
+                        <Tlacitko
+                          varianta="text"
+                          className="text-alert"
+                          disabled={smazatTrvale.isPending}
+                          onClick={() => {
+                            if (
+                              !confirm(
+                                `Smazat zakázku ${z.cislo} NATRVALO, včetně záznamů o jejích dokumentech? Toto už nejde vrátit.`,
+                              )
+                            )
+                              return;
+                            smazatTrvale.mutate({ id: z.id });
+                          }}
+                        >
+                          Smazat natrvalo
+                        </Tlacitko>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : null}
+        </section>
+      ) : null}
     </>
   );
 }

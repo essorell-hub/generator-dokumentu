@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { desc, eq, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "../__core/app";
 import { db } from "../database";
@@ -79,7 +79,7 @@ export const zakazkyRouter = {
     .handler(async ({ input }) => {
       const hledat = input?.hledat?.trim();
       const stav = input?.stav?.trim();
-      const podminky = [];
+      const podminky = [isNull(zakazky.smazanoAt)];
       if (hledat) {
         podminky.push(
           or(
@@ -92,10 +92,11 @@ export const zakazkyRouter = {
       }
       if (stav) podminky.push(eq(zakazky.stav, stav));
 
-      const dotaz = db.select().from(zakazky);
-      const radky = podminky.length
-        ? await dotaz.where(sql.join(podminky, sql` and `)).orderBy(desc(zakazky.updatedAt))
-        : await dotaz.orderBy(desc(zakazky.updatedAt));
+      const radky = await db
+        .select()
+        .from(zakazky)
+        .where(and(...podminky))
+        .orderBy(desc(zakazky.updatedAt));
 
       const soubory = await db
         .select({ zakazkaId: dokumenty.zakazkaId, pocet: sql<number>`count(*)` })
@@ -107,8 +108,11 @@ export const zakazkyRouter = {
     }),
 
   detail: base.input(z.object({ id: z.number() })).handler(async ({ input }) => {
-    const [zakazka] = await db.select().from(zakazky).where(eq(zakazky.id, input.id));
-    if (!zakazka) throw new ORPCError("NOT_FOUND", { message: "Zakázka nenalezena" });
+    const [zakazka] = await db
+      .select()
+      .from(zakazky)
+      .where(and(eq(zakazky.id, input.id), isNull(zakazky.smazanoAt)));
+    if (!zakazka) throw new ORPCError("NOT_FOUND", { message: "Zakázka nenalezena (je možná v koši)" });
     const soubory = await db
       .select()
       .from(dokumenty)
@@ -129,13 +133,33 @@ export const zakazkyRouter = {
   }),
 
   upravit: base
-    .input(vstupZakazky.partial({ cislo: true }).extend({ id: z.number() }))
+    .input(
+      vstupZakazky.partial({ cislo: true }).extend({
+        id: z.number(),
+        /** Čas poslední změny, který uživatel viděl při načtení (ms). Neshoda = mezitím někdo upravil. */
+        ocekavanaZmena: z.number().optional(),
+      }),
+    )
     .handler(async ({ input }) => {
-      const { id, ...zmeny } = input;
+      const { id, ocekavanaZmena, ...zmeny } = input;
+
+      if (ocekavanaZmena !== undefined) {
+        const [soucasna] = await db
+          .select({ updatedAt: zakazky.updatedAt })
+          .from(zakazky)
+          .where(eq(zakazky.id, id));
+        if (soucasna && soucasna.updatedAt.getTime() !== ocekavanaZmena) {
+          throw new ORPCError("CONFLICT", {
+            message: "Zakázku mezitím změnil někdo jiný.",
+            data: { zmeneno: soucasna.updatedAt.getTime() },
+          });
+        }
+      }
+
       const [zakazka] = await db
         .update(zakazky)
         .set({ ...ocisti(zmeny), updatedAt: new Date() })
-        .where(eq(zakazky.id, id))
+        .where(and(eq(zakazky.id, id), isNull(zakazky.smazanoAt)))
         .returning();
       if (!zakazka) throw new ORPCError("NOT_FOUND", { message: "Zakázka nenalezena" });
       // Identifikační údaje držíme v souladu s rejstříkem.
@@ -143,7 +167,46 @@ export const zakazkyRouter = {
       return zakazka;
     }),
 
+  /** Přesune zakázku do koše. Dokumenty ani rejstřík se nemažou, zakázku lze obnovit. */
   smazat: base.input(z.object({ id: z.number() })).handler(async ({ input }) => {
+    await db.update(zakazky).set({ smazanoAt: new Date() }).where(eq(zakazky.id, input.id));
+    return { ok: true };
+  }),
+
+  /** Zakázky v koši. */
+  kos: base.handler(async () => {
+    const radky = await db
+      .select()
+      .from(zakazky)
+      .where(isNotNull(zakazky.smazanoAt))
+      .orderBy(desc(zakazky.smazanoAt));
+    return radky.map((z) => ({
+      id: z.id,
+      cislo: z.cislo,
+      nazevStavby: z.nazevStavby,
+      investor: z.investor,
+      smazanoAt: z.smazanoAt,
+    }));
+  }),
+
+  /** Vrátí zakázku z koše zpět. */
+  obnovit: base.input(z.object({ id: z.number() })).handler(async ({ input }) => {
+    await db
+      .update(zakazky)
+      .set({ smazanoAt: null, updatedAt: new Date() })
+      .where(eq(zakazky.id, input.id));
+    return { ok: true };
+  }),
+
+  /** Nevratně smaže zakázku z koše včetně záznamů o jejích dokumentech. */
+  smazatTrvale: base.input(z.object({ id: z.number() })).handler(async ({ input }) => {
+    const [z1] = await db
+      .select({ smazanoAt: zakazky.smazanoAt })
+      .from(zakazky)
+      .where(eq(zakazky.id, input.id));
+    if (!z1?.smazanoAt) {
+      throw new ORPCError("BAD_REQUEST", { message: "Trvale lze smazat jen zakázku z koše." });
+    }
     await db.delete(dokumenty).where(eq(dokumenty.zakazkaId, input.id));
     // Řádek v rejstříku zůstává — fakturační a obchodní stopa se nemaže.
     await db.update(evidence).set({ zakazkaId: null }).where(eq(evidence.zakazkaId, input.id));

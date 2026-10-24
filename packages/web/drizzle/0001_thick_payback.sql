@@ -1,0 +1,1 @@
+ALTER TABLE `zakazky` ADD `smazano_at` integer;

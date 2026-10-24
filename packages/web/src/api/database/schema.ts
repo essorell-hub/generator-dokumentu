@@ -67,7 +67,9 @@ export const zakazky = sqliteTable("zakazky", {
   vykonFve: text("vykon_fve").notNull().default(""),
   distributor: text("distributor").notNull().default(""),
 
-  createdAt: integer("created_at", { mode: "timestamp" })
+    /** Zakázka v koši — vyplněné datum znamená „smazáno“, obnovit ji lze z koše. */
+  smazanoAt: integer("smazano_at", { mode: "timestamp" }),
+createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" })
