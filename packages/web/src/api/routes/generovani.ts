@@ -8,6 +8,7 @@ import { nactiFirmu, nacti, KLICE } from "../lib/nastaveni";
 import { jePripojeno, nahrajSoubor, zajistiSlozku, urlSlozky, DriveChyba } from "../lib/drive";
 import { nactiZakazku, nazevSlozky, sestavSadu, vyberKlice } from "../lib/sada";
 import { nactiDoplnky } from "../lib/provoz";
+import { zkontrolujUplnostZakazky } from "../lib/kontrola";
 
 const vstupKlice = z.object({
   zakazkaId: z.number(),
@@ -26,6 +27,19 @@ export const generovaniRouter = {
       nactiDoplnky(input.zakazkaId),
     ]);
     return Promise.all(vyberKlice(input.klice).map((klic) => zkontroluj(klic, zakazka, firma, doplnky)));
+  }),
+
+  /**
+   * Strukturovaná kontrola úplnosti podkladů a logických vazeb mezi údaji.
+   * Upozorňuje na chybějící povinné údaje i nesrovnalosti před generováním.
+   */
+  kontrolaUplnosti: base.input(vstupKlice).handler(async ({ input }) => {
+    const [zakazka, firma, doplnky] = await Promise.all([
+      nactiZakazku(input.zakazkaId),
+      nactiFirmu(),
+      nactiDoplnky(input.zakazkaId),
+    ]);
+    return zkontrolujUplnostZakazky(zakazka, firma, input.klice ?? [], doplnky);
   }),
 
   /** Vygeneruje vybrané dokumenty a nahraje je do složky zakázky na Disku. */

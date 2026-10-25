@@ -4,6 +4,7 @@ import { ping } from "./routes/ping";
 import { zakazkyRouter } from "./routes/zakazky";
 import { generovaniRouter } from "./routes/generovani";
 import { nastaveniRouter } from "./routes/nastaveni";
+import { driveFilesRouter } from "./routes/driveFiles";
 import {
   mailyRouter,
   normyRouter,
@@ -22,6 +23,10 @@ import {
 } from "./lib/agenda/xlsx";
 
 export const router = {
+  // ...existing routers
+  // přidáme driveFilesRouter pro čtení souborů ve složce
+  driveFiles: driveFilesRouter,
+
   ping,
   zakazky: zakazkyRouter,
   generovani: generovaniRouter,

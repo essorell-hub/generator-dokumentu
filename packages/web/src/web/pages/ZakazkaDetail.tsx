@@ -3,7 +3,13 @@ import { Link, useLocation, useParams } from "wouter";
 import { Check, Field, Select, TextInput, Tlacitko } from "../components/fields";
 import { Hr, PageTitle, SectionTitle, StavBadge } from "../components/layout";
 import { formatDatumCas, formatDatumIso, formatVelikost } from "../lib/format";
-import { useKontrola, useGenerovat, useHistorie, useKatalog } from "../queries/generovani";
+import {
+  useKontrola,
+  useKontrolaUplnosti,
+  useGenerovat,
+  useHistorie,
+  useKatalog,
+} from "../queries/generovani";
 import { useDriveStav } from "../queries/nastaveni";
 import { ProvozniDenik } from "../components/denik";
 import { useSmazatZakazku, useUpravitZakazku, useZakazka } from "../queries/zakazky";
@@ -74,6 +80,7 @@ export default function ZakazkaDetail() {
   const [vybrane, setVybrane] = useState<string[]>([]);
   const [zmeneno, setZmeneno] = useState(false);
   const [otevrenyNahled, setOtevrenyNahled] = useState<string | null>(null);
+  const [zobrazitKontrolu, setZobrazitKontrolu] = useState(false);
 
   useEffect(() => {
     if (!detail.data) return;
@@ -86,6 +93,17 @@ export default function ZakazkaDetail() {
     setForm(novy);
     setZmeneno(false);
   }, [detail.data]);
+
+  // Ochrana před ztrátou neuložených změn při odchodu ze stránky
+  useEffect(() => {
+    if (!zmeneno) return;
+    const varovani = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", varovani);
+    return () => window.removeEventListener("beforeunload", varovani);
+  }, [zmeneno]);
 
   // Výchozí výběr jen jednou: projektová a revizní dokumentace. Dokumenty pro provoz
   // VEZ si uživatel přidá, když je provozovatel objednal.
@@ -118,8 +136,17 @@ export default function ZakazkaDetail() {
 
   // Kontrola vyplnění běží pro celý katalog, aby i nevybrané dokumenty ukazovaly pravdivý stav.
   const kontrola = useKontrola(id, vsechnyKlice);
+  const kontrolaUplnosti = useKontrolaUplnosti(id, vybrane);
   const historie = useHistorie(id);
   const generovat = useGenerovat();
+
+  const mapaHistorie = useMemo(() => {
+    const mapa = new Map<string, NonNullable<typeof historie.data>[number]>();
+    for (const h of historie.data ?? []) {
+      if (!mapa.has(h.klic)) mapa.set(h.klic, h);
+    }
+    return mapa;
+  }, [historie.data]);
 
   const poctyNevyplneno = useMemo(() => {
     const mapa = new Map<string, string[]>();
@@ -139,6 +166,22 @@ export default function ZakazkaDetail() {
   const prepni = (klic: string) =>
     setVybrane((v) => (v.includes(klic) ? v.filter((k) => k !== klic) : [...v, klic]));
 
+  const stahnoutZalohuJson = () => {
+    const exportData = {
+      zakazka: form,
+      vygenerovaneSoubory: historie.data ?? [],
+      exportovanoDne: new Date().toISOString(),
+      verze: "1.0",
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `zakazka_${form.cislo || id}_zaloha.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (detail.isLoading) return <p className="text-ink-soft">Načítám…</p>;
   if (detail.isError || !detail.data) {
     return (
@@ -153,6 +196,7 @@ export default function ZakazkaDetail() {
 
   const zakazka = detail.data.zakazka;
   const zakazkaCislo = zakazka.cislo;
+  const vysledekUplnosti = kontrolaUplnosti.data;
 
   return (
     <>
@@ -168,6 +212,11 @@ export default function ZakazkaDetail() {
             <span className="font-mono text-[13px] text-ink-soft">{zakazkaCislo}</span>
             <StavBadge stav={zakazka.stav} />
             {zakazka.adresaStavby ? <span>{zakazka.adresaStavby}</span> : null}
+            {zmeneno ? (
+              <span className="rounded bg-amber/20 px-2 py-0.5 text-[11px] font-medium text-[#8A5200]">
+                Neuložené změny
+              </span>
+            ) : null}
           </span>
         }
       >
@@ -218,45 +267,42 @@ export default function ZakazkaDetail() {
             moznosti={[
               "ELEKTROINSTALACE / FVE / LPS / MaR",
               "ELEKTROINSTALACE",
-              "FVE",
-              "LPS",
-              "MaR",
-            ]} />
+              "FVE A BATERIOVÉ ÚLOŽIŠTĚ",
+              "OCHRANA PŘED BLESKEM (LPS)",
+              "MĚŘENÍ A REGULACE (MaR)",
+            ]} siroke />
         </Blok>
 
-        <Blok nazev="Investor / stavebník">
-          <Pole klic="investor" form={form} nastav={nastav} label="Název / jméno" siroke />
-          <Pole klic="investorAdresa" form={form} nastav={nastav} label="Adresa" siroke />
+        <Blok nazev="Investor stavby">
+          <Pole klic="investor" form={form} nastav={nastav} label="Jméno / název investora" siroke />
+          <Pole klic="investorAdresa" form={form} nastav={nastav} label="Sídlo / adresa" siroke />
           <Pole klic="investorIco" form={form} nastav={nastav} label="IČO" />
           <Pole klic="investorDic" form={form} nastav={nastav} label="DIČ" />
-          <Pole klic="investorZastupce" form={form} nastav={nastav} label="Zastoupený" siroke />
+          <Pole klic="investorZastupce" form={form} nastav={nastav} label="Zástupce investora" />
         </Blok>
 
-        <Blok
-          nazev="Objednatel (smlouva a nabídka)"
-          hint="Když je objednatel stejný jako investor, nechte blok prázdný — použije se investor."
-        >
-          <Pole klic="zakaznik" form={form} nastav={nastav} label="Název / jméno" siroke />
-          <Pole klic="zakaznikAdresa" form={form} nastav={nastav} label="Adresa" siroke />
+        <Blok nazev="Zákazník / objednatel (nabídka, smlouva)">
+          <Pole klic="zakaznik" form={form} nastav={nastav} label="Jméno / název zákazníka" siroke />
+          <Pole klic="zakaznikAdresa" form={form} nastav={nastav} label="Sídlo / adresa" siroke />
           <Pole klic="zakaznikIco" form={form} nastav={nastav} label="IČO" />
           <Pole klic="zakaznikDic" form={form} nastav={nastav} label="DIČ" />
-          <Pole klic="zakaznikZastupce" form={form} nastav={nastav} label="Zastoupený" />
-          <Pole klic="zakaznikKontakt" form={form} nastav={nastav} label="Kontakt" />
+          <Pole klic="zakaznikZastupce" form={form} nastav={nastav} label="Zástupce zákazníka" />
+          <Pole klic="zakaznikKontakt" form={form} nastav={nastav} label="Kontakt (telefon, e-mail)" />
         </Blok>
 
-        <Blok nazev="Osoby">
+        <Blok nazev="Projektant a zpracovatelé">
           <Pole klic="projektantJmeno" form={form} nastav={nastav} label="Hlavní projektant" />
-          <Pole klic="projektantAutorizace" form={form} nastav={nastav} label="Autorizace ČKAIT / ČKA" />
+          <Pole klic="projektantAutorizace" form={form} nastav={nastav} label="Číslo autorizace ČKAIT / ČKA" />
           <Pole klic="projektantObor" form={form} nastav={nastav} label="Obor" />
           <Pole klic="projektantSpecializace" form={form} nastav={nastav} label="Specializace" />
-          <Pole klic="zpracovatelJmeno" form={form} nastav={nastav} label="Zpracoval" hint="Prázdné = hlavní projektant" />
-          <Pole klic="elektroTechnikJmeno" form={form} nastav={nastav} label="Odpovědný technik / revizní technik" />
-          <Pole klic="elektroTechnikAutorizace" form={form} nastav={nastav} label="Autorizace technika" />
+          <Pole klic="zpracovatelJmeno" form={form} nastav={nastav} label="Zpracovatel části" />
+          <Pole klic="elektroTechnikJmeno" form={form} nastav={nastav} label="Revizní technik" />
+          <Pole klic="elektroTechnikAutorizace" form={form} nastav={nastav} label="Evidenční číslo osvědčení RT" />
         </Blok>
 
-        <Blok nazev="Termíny a čísla">
-          <Pole klic="datum" form={form} nastav={nastav} label="Datum zpracování" typ="datum" />
-          <Pole klic="datumMistnihoSetreni" form={form} nastav={nastav} label="Místní šetření" typ="datum" />
+        <Blok nazev="Termíny a čísla dokumentů">
+          <Pole klic="datum" form={form} nastav={nastav} label="Datum vyhotovení" typ="datum" />
+          <Pole klic="datumMistnihoSetreni" form={form} nastav={nastav} label="Datum místního šetření" typ="datum" />
           <Pole klic="datumPristiRevize" form={form} nastav={nastav} label="Platnost / další revize" typ="datum" />
           <Pole klic="mistoPodpisu" form={form} nastav={nastav} label="Místo podpisu" />
           <Pole klic="cisloZpravy" form={form} nastav={nastav} label="Číslo revizní zprávy" />
@@ -272,10 +318,18 @@ export default function ZakazkaDetail() {
           <Pole klic="distributor" form={form} nastav={nastav} label="Distributor" />
         </Blok>
 
-        <div className="flex items-center gap-4 border-t border-line pt-6">
+        <div className="flex flex-wrap items-center gap-4 border-t border-line pt-6">
           <Tlacitko onClick={ulozit} disabled={!zmeneno || upravit.isPending}>
             {upravit.isPending ? "Ukládám…" : zmeneno ? "Uložit údaje" : "Uloženo"}
           </Tlacitko>
+          <button
+            type="button"
+            onClick={stahnoutZalohuJson}
+            className="rounded-[2px] border border-line bg-paper px-3 py-1.5 text-[12px] text-ink-soft transition-colors hover:border-brick hover:text-brick"
+            title="Stáhne strukturovaný JSON se všemi údaji zakázky pro lokální archivaci"
+          >
+            Exportovat zálohu (JSON)
+          </button>
           {upravit.isError ? (
             <span className="text-[13px] text-alert">{upravit.error.message}</span>
           ) : null}
@@ -303,6 +357,67 @@ export default function ZakazkaDetail() {
         >
           Generátor dokumentů
         </SectionTitle>
+
+        {/* Kontrola úplnosti podkladů zakázky */}
+        {vysledekUplnosti ? (
+          <div className="mb-8 border border-line bg-paper p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-[12px] font-semibold tracking-[0.1em] text-brick uppercase">
+                  Kontrola úplnosti podkladů
+                </span>
+                {vysledekUplnosti.celkovyStav === "neuplne" ? (
+                  <span className="rounded bg-alert/15 px-2 py-0.5 text-[11px] font-medium text-alert">
+                    {vysledekUplnosti.pocetKritickych + vysledekUplnosti.pocetRozporu} závažných zjištění
+                  </span>
+                ) : vysledekUplnosti.celkovyStav === "varovani" ? (
+                  <span className="rounded bg-[#a9741f]/15 px-2 py-0.5 text-[11px] font-medium text-[#a9741f]">
+                    {vysledekUplnosti.pocetVarovani} doporučení k doplnění
+                  </span>
+                ) : (
+                  <span className="rounded bg-moss/15 px-2 py-0.5 text-[11px] font-medium text-moss">
+                    Všechny kontrolované podklady kompletní
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setZobrazitKontrolu((z) => !z)}
+                className="text-[12px] text-brick hover:underline"
+              >
+                {zobrazitKontrolu ? "Skrýt podrobnosti ▴" : `Zobrazit podrobnosti (${vysledekUplnosti.polozky.length}) ▾`}
+              </button>
+            </div>
+
+            {zobrazitKontrolu && vysledekUplnosti.polozky.length > 0 ? (
+              <div className="mt-4 space-y-2 border-t border-line/60 pt-3">
+                {vysledekUplnosti.polozky.map((p, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-[12px]">
+                    <span
+                      className={`font-mono text-[10px] uppercase px-1 rounded ${
+                        p.zavaznost === "kriticka"
+                          ? "bg-alert/15 text-alert"
+                          : p.zavaznost === "rozpor"
+                            ? "bg-clay/20 text-clay"
+                            : "bg-[#a9741f]/15 text-[#a9741f]"
+                      }`}
+                    >
+                      {p.zavaznost}
+                    </span>
+                    <div>
+                      <span className="text-ink font-medium">{p.zprava}</span>
+                      <span className="text-ink-soft ml-2">{p.doporuceni}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <p className="mt-3 text-[11px] leading-relaxed text-ink-soft/80 italic">
+              {vysledekUplnosti.prohlaseni}
+            </p>
+          </div>
+        ) : null}
 
         {drive.data && !drive.data.pripojeno ? (
           <div className="mb-8 border border-line bg-note-wash px-5 py-4">
@@ -361,6 +476,8 @@ export default function ZakazkaDetail() {
                   const vybrano = vybrane.includes(d.klic);
                   const nevyplneno = poctyNevyplneno.get(d.klic);
                   const otevreno = otevrenyNahled === d.klic;
+                  const historieDoc = mapaHistorie.get(d.klic);
+
                   return (
                     <div key={d.klic} className="border-b border-line py-3">
                       <Check
@@ -377,6 +494,18 @@ export default function ZakazkaDetail() {
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7">
                         <span className="font-mono text-[11px] text-ink-soft">{d.revize}</span>
                         {d.predpis ? <span className="text-[11px] text-ink-soft">{d.predpis}</span> : null}
+
+                        {/* Indikátor historie generování pro daný dokument */}
+                        {historieDoc ? (
+                          <span className="text-[11px] text-moss font-medium">
+                            ✓ Vygenerováno
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-ink-soft/60">
+                            dosud negenerováno
+                          </span>
+                        )}
+
                         {kontrola.isLoading ? (
                           <span className="text-[12px] text-ink-soft">kontroluji…</span>
                         ) : nevyplneno?.length ? (
@@ -390,6 +519,25 @@ export default function ZakazkaDetail() {
                         ) : nevyplneno ? (
                           <span className="text-[12px] text-moss">vše vyplněno</span>
                         ) : null}
+
+                        {historieDoc?.driveUrl ? (
+                          <a
+                            href={historieDoc.driveUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-brick underline"
+                          >
+                            Disk
+                          </a>
+                        ) : (
+                          <a
+                            href={`/api/soubory/docx?zakazkaId=${id}&klic=${d.klic}`}
+                            className="text-[11px] text-brick hover:underline"
+                            title="Stáhnout DOCX přímo"
+                          >
+                            stáhnout
+                          </a>
+                        )}
                       </div>
                       {otevreno && nevyplneno ? (
                         <ul className="mt-3 ml-7 space-y-1">

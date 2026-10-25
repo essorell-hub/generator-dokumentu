@@ -145,6 +145,25 @@ export async function ulozSlozku(id: string, nazev: string): Promise<void> {
   await Promise.all([uloz(KLICE.driveFolderId, id), uloz(KLICE.driveFolderNazev, nazev)]);
 }
 
+/**
+ * Načte obsah souboru z Google Drive jako Uint8Array.
+ * Používá přístupový token získaný přes OAuth.
+ * Vrací raw data (např. DOCX, XLSX) bez dalšího zpracování.
+ */
+export async function nactiSoubor(id: string): Promise<Uint8Array> {
+  const token = await pristupovyToken();
+  const res = await fetch(`${DRIVE_API}/files/${id}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new DriveChyba(`Stahování souboru selhalo ${res.status}: ${await res.text()}`, res.status);
+  }
+  const buffer = await res.arrayBuffer();
+  return new Uint8Array(buffer);
+}
+  await Promise.all([uloz(KLICE.driveFolderId, id), uloz(KLICE.driveFolderNazev, nazev)]);
+}
+
 async function pristupovyToken(): Promise<string> {
   const refresh = await nacti(KLICE.driveRefreshToken);
   if (!refresh) throw new DriveChyba("Google Drive není připojen. Připojte ho v Nastavení.", 400);

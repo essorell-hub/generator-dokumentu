@@ -12,6 +12,13 @@ export function useKontrola(zakazkaId: number, klice: string[]) {
   });
 }
 
+export function useKontrolaUplnosti(zakazkaId: number, klice: string[]) {
+  return useQuery({
+    ...orpc.generovani.kontrolaUplnosti.queryOptions({ input: { zakazkaId, klice } }),
+    enabled: zakazkaId > 0,
+  });
+}
+
 export function useGenerovat() {
   const qc = useQueryClient();
   return useMutation(
