@@ -6,6 +6,7 @@
  *  - nové dokumenty (`NOVE`) — generované přímo, s údaji z provozní agendy.
  */
 import { fillDocx } from "./docx";
+import { normyRules } from "./normy";
 import {
   DOCS,
   docByKlic,
@@ -61,9 +62,13 @@ export function generujDokument(
   zakazka: Zakazka,
   firma: Firma,
   options: MoznostiGenerovani = {},
+  rejstrikNorem: { oznaceni: string }[] = [],
 ): VysledekDokumentu {
   const { data, unresolved } = fillDocx(templateBytes(doc), {
-    rules: doc.rules(zakazka, firma, options.doplnky ?? PRAZDNE_DOPLNKY),
+    rules: [
+      ...normyRules(rejstrikNorem),
+      ...doc.rules(zakazka, firma, options.doplnky ?? PRAZDNE_DOPLNKY),
+    ],
     highlight: options.highlight !== false,
     meta: {
       title: `${doc.nazev} — ${zakazka.nazevStavby || zakazka.cislo}`,
@@ -85,9 +90,10 @@ export async function generujPodleKlice(
   zakazka: Zakazka,
   firma: Firma,
   options: MoznostiGenerovani = {},
+  rejstrikNorem: { oznaceni: string }[] = [],
 ): Promise<VysledekDokumentu> {
   const doc = docByKlic(klic);
-  if (doc) return generujDokument(doc, zakazka, firma, options);
+  if (doc) return generujDokument(doc, zakazka, firma, options, rejstrikNorem);
   const novy = novyByKlic(klic);
   if (!novy) throw new Error(`Neznámý dokument: ${klic}`);
   const { data, nevyplneno } = await novy.generuj(zakazka, firma, {

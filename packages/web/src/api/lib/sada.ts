@@ -5,6 +5,7 @@ import { zakazky } from "../database/schema";
 import { generujPodleKlice, vsechnyKlice, type Firma, type VysledekDokumentu, type Zakazka } from "./docgen";
 import { nactiDoplnky } from "./provoz";
 import { nactiFirmu, zvraznitNevyplnene } from "./nastaveni";
+import { seznamNormy } from "./agenda/data";
 
 export async function nactiZakazku(id: number): Promise<Zakazka & { id: number }> {
   const [row] = await db.select().from(zakazky).where(eq(zakazky.id, id));
@@ -27,15 +28,16 @@ export interface Sada {
 }
 
 export async function sestavSadu(zakazkaId: number, klice?: string[]): Promise<Sada> {
-  const [zakazka, firma, zvraznit, doplnky] = await Promise.all([
+  const [zakazka, firma, zvraznit, doplnky, normy] = await Promise.all([
     nactiZakazku(zakazkaId),
     nactiFirmu(),
     zvraznitNevyplnene(),
     nactiDoplnky(zakazkaId),
+    seznamNormy().catch(() => [] as { oznaceni: string }[]),
   ]);
   const soubory: VysledekDokumentu[] = [];
   for (const klic of vyberKlice(klice)) {
-    soubory.push(await generujPodleKlice(klic, zakazka, firma, { highlight: zvraznit, doplnky }));
+    soubory.push(await generujPodleKlice(klic, zakazka, firma, { highlight: zvraznit, doplnky }, normy));
   }
   return { zakazka, firma, soubory, zvraznit };
 }
