@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 export function Mosaic({ className }: { className?: string }) {
@@ -7,16 +7,15 @@ export function Mosaic({ className }: { className?: string }) {
 }
 
 function NavItem({ href, children }: { href: string; children: ReactNode }) {
-  const [misto] = useLocation();
+  const location = useLocation();
+  const path = location.pathname;
   const aktivni =
     href === "/"
-      ? misto === "/" || misto.startsWith("/zakazka/")
-      : href === "/rejstrik"
-        ? misto.startsWith("/rejstrik") || misto.startsWith("/revize")
-        : misto.startsWith(href);
+      ? path === "/" || path.startsWith("/zakazka/")
+      : path.startsWith(href);
   return (
     <Link
-      href={href}
+      to={href}
       className={cn(
         "text-[12px] uppercase tracking-[0.12em] whitespace-nowrap transition-colors",
         aktivni ? "text-brick" : "text-ink-soft hover:text-brick-deep",
@@ -33,7 +32,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <Mosaic />
       <header className="border-b border-line">
         <div className="mx-auto flex max-w-[1080px] items-center justify-between gap-6 px-6 py-5">
-          <Link href="/" className="flex items-baseline gap-3">
+          <Link to="/" className="flex items-baseline gap-3">
             <span className="font-mono text-[11px] tracking-[0.28em] text-ink-soft uppercase">
               Loskot Hozáková
             </span>
